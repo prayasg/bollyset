@@ -9,7 +9,8 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
     # urls = pd.read_csv('data/urls.csv')
     # start_urls = urls['start_urls'].tolist()
-    start_urls = ['https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2023']
+    start_urls = ['https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2023',
+                  'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024',]
     
     def parse(self, response):
         self.logger.warning(f"response: {response.url}")
@@ -17,25 +18,39 @@ class BollywikiSpiderSpider(scrapy.Spider):
         tables = response.xpath('//table[@class="wikitable"]')
         self.logger.warning(f"# tables: {len(tables)}")
 
+        item_list = []
         for table in tables:
             items = self.process_table(table, response)
             for item in items:
+                item_list.append(item)
                 yield item
-            break
+
 
     def process_table(self, table, response):
         table = self.preprocess_html(table) # fix ul issue
         df = pd.read_html(StringIO(table))[0] # string to dataframe
-        self.logger.warning(f"table: {df}")
+        self.logger.warning(f"df shape: {df.shape}")  # rows, columns
+        self.logger.warning(f"df columns: {df.columns}") # column names
+        self.logger.info(f"table: {df}") # at a lower level, there if you want to see it default hidden
+
+        if df.shape[1] < 4:
+            return
 
         # transformations
         column_names = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
         df.columns = column_names
 
+        # hanlde missing values
+        subset = ['title', 'director', 'cast', 'studio', 'ref']
+        df.loc[:, subset] = df.loc[:, subset].fillna('')
+
+        subset = ['opening_month', 'opening_day']
+        df.loc[:, subset] = df.loc[:, subset].fillna('1')
+
         # date processing
         df['year'] = response.url.split('_')[-1] 
-        df['opening_day'] = df['opening_day'].apply(str)
-        df['opening_month'] = df['opening_month'].str.replace(' ', '') # J A N -> JAN
+        df['opening_day'] = df['opening_day'].apply(int).apply(str)
+        df['opening_month'] = df['opening_month'].str.replace(' ', '')
 
         dates = df.loc[:, ['opening_month', 'opening_day', 'year']].copy() # ['JAN', '1', '2024']
         dates = dates.apply(lambda x: x.tolist(), axis=1) # ['JAN','1','2024']

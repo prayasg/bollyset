@@ -93,3 +93,13 @@ ROBOTSTXT_OBEY = True
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
+
+FEEDS = {
+    'data/bollyset.csv': {
+        'format': 'csv',
+        'encoding': 'utf8',
+        'store_empty': False,
+        # 'fields': ['field1', 'field2'],  # specify the fields to include in the CSV, or remove to include all fields
+        'overwrite': True  # set to False if you don't want to overwrite the file on each run
+    },
+}
