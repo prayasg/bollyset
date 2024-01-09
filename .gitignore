@@ -1,3 +1,5 @@
 
 *.pyc
 *.pyc
+*.pyc
+scraper/bollywiki_scraper/data/.DS_Store

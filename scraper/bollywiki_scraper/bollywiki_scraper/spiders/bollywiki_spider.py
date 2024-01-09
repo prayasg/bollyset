@@ -23,6 +23,11 @@ class BollywikiSpiderSpider(scrapy.Spider):
         'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2014',
         'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2013',
         'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2012',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2011',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2010',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2009',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2008',
+
     ]
 
     def parse(self, response):
@@ -49,11 +54,11 @@ class BollywikiSpiderSpider(scrapy.Spider):
         
         self.logger.info(f"table: {df}") # at a lower level, there if you want to see it default hidden
 
-
         # basic transformations
         year = response.url.split('_')[-1] 
         df['year'] = year
 
+        # some checks to see if the table is valid
         if self.df_skip(df):
             return
 
@@ -84,22 +89,17 @@ class BollywikiSpiderSpider(scrapy.Spider):
             yield item
 
     def df_skip(self, df):
-        # skip if table has too few columns
-        if df.shape[1] < 6:
-            self.logger.warning(f"df shape: {df.shape}. too few columns. skipping.")
-            return True
-        
         # skip if table has too few rows
         if df.shape[0] < 2:
             self.logger.warning(f"df shape: {df.shape}. too few rows. skipping.")
             return True
 
         # skip if table has columns with the work "Rank" or "Gross"
-        if 'Rank' in df.columns: 
+        if any('rank' in col.lower() for col in df.columns): 
             self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
             return True
         
-        if any('Gross' in col for col in df.columns):
+        if any('gross' in col.lower() for col in df.columns):
             self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
             return True
         
@@ -108,8 +108,7 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
     def standardize_column_names(self, df):
         common_column_names = {
-            'Opening':'opening_month',
-            'Opening.1':'opening_day',
+
             'Title':'title',
             'Director':'director',
             'Cast':'cast',
@@ -117,6 +116,20 @@ class BollywikiSpiderSpider(scrapy.Spider):
         df = df.rename(columns=common_column_names)
 
         columns = df.columns.tolist()
+
+        # 'Opening':'opening_month',
+        if 'Opening' in columns:
+            column_names = {'Opening':'opening_month'}
+            df = df.rename(columns=column_names)
+        else:
+            df['opening_month'] = ''
+
+        # 'Opening.1':'opening_day',
+        if 'Opening.1' in columns:
+            column_names = {'Opening.1':'opening_day'}
+            df = df.rename(columns=column_names)
+        else:
+            df['opening_day'] = ''
 
         # studio
         if 'Production house' in columns:
