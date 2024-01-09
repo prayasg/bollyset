@@ -16,18 +16,19 @@ class BollywikiSpiderSpider(scrapy.Spider):
         self.logger.warning(f"response: {response.url}")
         
         tables = response.xpath('//table[@class="wikitable"]')
-        # tables is a list of selectors
         self.logger.warning(f"# tables: {len(tables)}")
-        self.logger.warning(f"{tables}")
 
         for table in tables:
             item = self.process_table(table) 
             yield item
+            break
 
     def process_table(self, table):
         table = table.get() # selector to string
+        df = pd.read_html(table)[0] # string to dataframe
+        self.logger.warning(f"table: {df}")
+
         item = BollywikiScraperItem()
-        self.logger.info(f"table: {table}")
         return item
 
 class BollywikiScraperItem(scrapy.Item):
