@@ -19,11 +19,14 @@ class BollywikiSpiderSpider(scrapy.Spider):
         tables = response.xpath('//table[@class="wikitable"]')
         self.logger.warning(f"# tables: {len(tables)}")
 
+        # save items in a list
+        items_list = []
         for table in tables:
             items = self.process_table(table, response)
             for item in items:
+                # items_list.append(item)
                 yield item
-            break
+
 
     def process_table(self, table, response):
         table = self.preprocess_html(table) # fix ul issue
@@ -35,9 +38,19 @@ class BollywikiSpiderSpider(scrapy.Spider):
         column_names = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
         df.columns = column_names
 
+        # round 8
+        # df = df.fillna('')
+        subset = ['title', 'director', 'cast', 'studio', 'ref']
+        df.loc[:, subset] = df.loc[:, subset].fillna('')
+
+        subset = ['opening_month', 'opening_day']
+        df.loc[:, subset] = df.loc[:, subset].fillna('1')
+        
+        self.logger.warning(f"table: {df}")
+
         # round 7
         df['year'] = response.url.split('_')[-1] 
-        df['opening_day'] = df['opening_day'].apply(str)
+        df['opening_day'] = df['opening_day'].apply(int).apply(str)
         df['opening_month'] = df['opening_month'].str.replace(' ', '')
 
         df['date'] = df.loc[:, ['opening_month', 'opening_day', 'year']].apply(lambda x: ','.join(x.tolist()), axis=1)
@@ -86,3 +99,4 @@ class BollywikiScraperItem(scrapy.Item):
 
     opening_year = scrapy.Field()
     opening_date = scrapy.Field()
+
