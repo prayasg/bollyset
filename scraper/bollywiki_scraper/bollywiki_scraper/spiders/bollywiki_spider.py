@@ -3,8 +3,6 @@ import pandas as pd
 from io import StringIO
 from bs4 import BeautifulSoup
 
-
-
 class BollywikiSpiderSpider(scrapy.Spider):
     name = "bollywiki_spider"
     allowed_domains = ["en.wikipedia.org"]
@@ -31,28 +29,27 @@ class BollywikiSpiderSpider(scrapy.Spider):
         self.logger.warning(f"table: {df}")
 
         # transformations
-        # round 3
         column_names = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
         df.columns = column_names
 
-        # round 7
+        # date processing
         df['year'] = response.url.split('_')[-1] 
         df['opening_day'] = df['opening_day'].apply(str)
-        df['opening_month'] = df['opening_month'].str.replace(' ', '')
+        df['opening_month'] = df['opening_month'].str.replace(' ', '') # J A N -> JAN
 
-        df['date'] = df.loc[:, ['opening_month', 'opening_day', 'year']].apply(lambda x: ','.join(x.tolist()), axis=1)
-        df['date'] = pd.to_datetime(df['date'], format='%b,%d,%Y')
-        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+        dates = df.loc[:, ['opening_month', 'opening_day', 'year']].copy() # ['JAN', '1', '2024']
+        dates = dates.apply(lambda x: x.tolist(), axis=1) # ['JAN','1','2024']
+        dates = dates.apply(lambda x: ','.join(x)) # 'JAN,1,2024'
+
+        dates = pd.to_datetime(dates, format='%b,%d,%Y') # pandas date object
+        df['date'] = dates.dt.strftime('%Y-%m-%d') # date obj to string
 
         for i, row in df.iterrows():
             item = BollywikiScraperItem()
-            # round 4
             item['title'] = row['title']
-            # round 5
             item['director'] = row['director']
-            # round 6
             item['cast'] = row['cast']
-            # round 7
+
             item['opening_year'] = row['year']
             item['opening_date'] = row['date']
 
@@ -76,8 +73,6 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
         modified_html = str(soup)
         return modified_html
-
-
 
 class BollywikiScraperItem(scrapy.Item):
     title = scrapy.Field()
