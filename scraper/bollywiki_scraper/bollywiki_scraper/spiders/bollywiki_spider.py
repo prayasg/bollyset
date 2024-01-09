@@ -17,13 +17,19 @@ class BollywikiSpiderSpider(scrapy.Spider):
         'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2020',
         'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2019',
         'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2018',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2017',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2016',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2015',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2014',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2013',
+        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2012',
     ]
-
 
     def parse(self, response):
         self.logger.warning(f"response: {response.url}")
         
-        tables = response.xpath('//table[@class="wikitable"]')
+        # tables = response.xpath('//table[@class="wikitable"]')
+        tables = response.xpath('//table[contains(@class, "wikitable")]')
         self.logger.warning(f"# tables: {len(tables)}")
 
         item_list = []
@@ -41,17 +47,26 @@ class BollywikiSpiderSpider(scrapy.Spider):
         self.logger.warning(f"df shape: {df.shape}")  # rows, columns
         self.logger.warning(f"df columns: {df.columns}") # column names
         
-        self.logger.info(f"table: {df.head()}") # at a lower level, there if you want to see it default hidden
+        self.logger.info(f"table: {df}") # at a lower level, there if you want to see it default hidden
 
-        if df.shape[1] < 6:
+
+        # basic transformations
+        year = response.url.split('_')[-1] 
+        df['year'] = year
+
+        if self.df_skip(df):
             return
-        
-        df['year'] = response.url.split('_')[-1] 
 
-        # transformations
-        column_names = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
-        df.columns = column_names
+        # Filter rows with more than 5 null values
+        # sometimes the table picks up ghost rows at the bottom
+        df = df[df.isnull().sum(axis=1) <= 3]
 
+        # Filter rows where the string length is more than 6
+        # bug in the wiki data. one table has a row with a long string
+        # Should be "J U N" but is "Good Luck Jerry"
+        df = df[df['Opening'].str.len() <= 6]
+
+        df = self.standardize_column_names(df)
         df = self.df_transformations(df)
 
         for _, row in df.iterrows():
@@ -63,8 +78,77 @@ class BollywikiSpiderSpider(scrapy.Spider):
             item['opening_year'] = row['year']
             item['opening_date'] = row['date']
 
+            item['genre'] = row['genre']
+
             self.logger.warning(f"item: {item}")
             yield item
+
+    def df_skip(self, df):
+        # skip if table has too few columns
+        if df.shape[1] < 6:
+            self.logger.warning(f"df shape: {df.shape}. too few columns. skipping.")
+            return True
+        
+        # skip if table has too few rows
+        if df.shape[0] < 2:
+            self.logger.warning(f"df shape: {df.shape}. too few rows. skipping.")
+            return True
+
+        # skip if table has columns with the work "Rank" or "Gross"
+        if 'Rank' in df.columns: 
+            self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
+            return True
+        
+        if any('Gross' in col for col in df.columns):
+            self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
+            return True
+        
+        return False
+
+
+    def standardize_column_names(self, df):
+        common_column_names = {
+            'Opening':'opening_month',
+            'Opening.1':'opening_day',
+            'Title':'title',
+            'Director':'director',
+            'Cast':'cast',
+        }
+        df = df.rename(columns=common_column_names)
+
+        columns = df.columns.tolist()
+
+        # studio
+        if 'Production house' in columns:
+            column_names = {'Production house':'studio',}
+            df = df.rename(columns=column_names)
+        elif 'Studio (production house)' in columns:
+            column_names = {'Studio (production house)': 'studio'}
+            df = df.rename(columns=column_names)
+        else:
+            df['studio'] = ''
+
+        # ref
+        if 'Ref.' in columns:
+            column_names = {'Ref.':'ref'}
+            df = df.rename(columns=column_names)
+        elif 'Source' in columns:
+            column_names = {'Source':'ref'}
+            df = df.rename(columns=column_names)
+        else:
+            df['ref'] = ''
+        
+        # genre
+        if 'Genre' in columns:
+            column_names = {
+                'Genre':'genre',
+            }
+            df = df.rename(columns=column_names)
+        else:
+            df['genre'] = ''
+
+        return df
+
 
     def df_transformations(self, df):
         # hanlde missing values
@@ -75,8 +159,17 @@ class BollywikiSpiderSpider(scrapy.Spider):
         df.loc[:, subset] = df.loc[:, subset].fillna('1')
 
         # date processing
+        df['opening_day'] = pd.to_numeric(df['opening_day'], errors='coerce').fillna(1)
         df['opening_day'] = df['opening_day'].apply(int).apply(str)
+
+        # data issues cause the month to be weird. 
+        # sometimes it's a number, sometimes it's a string the column values slide around
+        # replace all numbers with empty string and then NOne
         df['opening_month'] = df['opening_month'].str.replace(' ', '')
+        df['opening_month'] = df['opening_month'].str.replace('[0-9]+', '', regex=True)
+        df = df.applymap(lambda x: None if x == '' else x)
+        # filter out rows where opening_month is null
+        df = df[df['opening_month'].notnull()]
 
         dates = df.loc[:, ['opening_month', 'opening_day', 'year']].copy() # ['JAN', '1', '2024']
         dates = dates.apply(lambda x: x.tolist(), axis=1) # ['JAN','1','2024']
@@ -84,6 +177,9 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
         dates = pd.to_datetime(dates, format='%b,%d,%Y') # pandas date object
         df['date'] = dates.dt.strftime('%Y-%m-%d') # date obj to string
+
+        df['genre'] = df['genre'].str.replace('/', ',')
+        df['genre'] = df['genre'].str.lower()
 
         return df
 
@@ -112,3 +208,5 @@ class BollywikiScraperItem(scrapy.Item):
 
     opening_year = scrapy.Field()
     opening_date = scrapy.Field()
+    
+    genre = scrapy.Field()
