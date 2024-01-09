@@ -1,0 +1,23 @@
+name: bollyset
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11  # You can specify your desired Python version
+  - scrapy
+  - pandas
+  - ipython
+  - jupyterlab
+  - scikit-learn
+  - lxml
+  - requests
+  - beautifulsoup4
+  - seaborn
+  - html5lib
+  - pip
+  - pip:
+    - scrapy-playwright
+    - google-cloud-bigquery
+    - google-cloud-storage
+    - google-cloud-bigquery-storage
+    - google-cloud-core

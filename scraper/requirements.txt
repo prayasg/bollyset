@@ -1,0 +1,6 @@
+# requirements.txt
+scrapy-playwright
+google-cloud-bigquery
+google-cloud-storage
+google-cloud-bigquery-storage
+google-cloud-core
