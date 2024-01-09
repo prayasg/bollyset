@@ -36,38 +36,25 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
     def process_table(self, table, response):
         table = self.preprocess_html(table) # fix ul issue
+
         df = pd.read_html(StringIO(table))[0] # string to dataframe
         self.logger.warning(f"df shape: {df.shape}")  # rows, columns
         self.logger.warning(f"df columns: {df.columns}") # column names
-        self.logger.info(f"table: {df}") # at a lower level, there if you want to see it default hidden
+        
+        self.logger.info(f"table: {df.head()}") # at a lower level, there if you want to see it default hidden
 
-        if df.shape[1] < 4:
+        if df.shape[1] < 6:
             return
+        
+        df['year'] = response.url.split('_')[-1] 
 
         # transformations
         column_names = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
         df.columns = column_names
 
-        # hanlde missing values
-        subset = ['title', 'director', 'cast', 'studio', 'ref']
-        df.loc[:, subset] = df.loc[:, subset].fillna('')
+        df = self.df_transformations(df)
 
-        subset = ['opening_month', 'opening_day']
-        df.loc[:, subset] = df.loc[:, subset].fillna('1')
-
-        # date processing
-        df['year'] = response.url.split('_')[-1] 
-        df['opening_day'] = df['opening_day'].apply(int).apply(str)
-        df['opening_month'] = df['opening_month'].str.replace(' ', '')
-
-        dates = df.loc[:, ['opening_month', 'opening_day', 'year']].copy() # ['JAN', '1', '2024']
-        dates = dates.apply(lambda x: x.tolist(), axis=1) # ['JAN','1','2024']
-        dates = dates.apply(lambda x: ','.join(x)) # 'JAN,1,2024'
-
-        dates = pd.to_datetime(dates, format='%b,%d,%Y') # pandas date object
-        df['date'] = dates.dt.strftime('%Y-%m-%d') # date obj to string
-
-        for i, row in df.iterrows():
+        for _, row in df.iterrows():
             item = BollywikiScraperItem()
             item['title'] = row['title']
             item['director'] = row['director']
@@ -78,6 +65,27 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
             self.logger.warning(f"item: {item}")
             yield item
+
+    def df_transformations(self, df):
+        # hanlde missing values
+        subset = ['title', 'director', 'cast', 'studio', 'ref']
+        df.loc[:, subset] = df.loc[:, subset].fillna('')
+
+        subset = ['opening_month', 'opening_day']
+        df.loc[:, subset] = df.loc[:, subset].fillna('1')
+
+        # date processing
+        df['opening_day'] = df['opening_day'].apply(int).apply(str)
+        df['opening_month'] = df['opening_month'].str.replace(' ', '')
+
+        dates = df.loc[:, ['opening_month', 'opening_day', 'year']].copy() # ['JAN', '1', '2024']
+        dates = dates.apply(lambda x: x.tolist(), axis=1) # ['JAN','1','2024']
+        dates = dates.apply(lambda x: ','.join(x)) # 'JAN,1,2024'
+
+        dates = pd.to_datetime(dates, format='%b,%d,%Y') # pandas date object
+        df['date'] = dates.dt.strftime('%Y-%m-%d') # date obj to string
+
+        return df
 
     def preprocess_html(self, table):
         table = table.get() # selector to string
