@@ -1,6 +1,7 @@
 import scrapy
 import pandas as pd
 from io import StringIO
+from bs4 import BeautifulSoup
 
 
 
@@ -19,21 +20,73 @@ class BollywikiSpiderSpider(scrapy.Spider):
         self.logger.warning(f"# tables: {len(tables)}")
 
         for table in tables:
-            item = self.process_table(table) 
-            yield item
+            items = self.process_table(table, response)
+            for item in items:
+                yield item
             break
 
-    def process_table(self, table):
-        table = table.get() # selector to string
-        df = pd.read_html(table)[0] # string to dataframe
+    def process_table(self, table, response):
+        table = self.preprocess_html(table) # fix ul issue
+        df = pd.read_html(StringIO(table))[0] # string to dataframe
         self.logger.warning(f"table: {df}")
 
-        item = BollywikiScraperItem()
-        return item
+        # transformations
+        # round 3
+        column_names = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
+        df.columns = column_names
+
+        # round 7
+        df['year'] = response.url.split('_')[-1] 
+        df['opening_day'] = df['opening_day'].apply(str)
+        df['opening_month'] = df['opening_month'].str.replace(' ', '')
+
+        df['date'] = df.loc[:, ['opening_month', 'opening_day', 'year']].apply(lambda x: ','.join(x.tolist()), axis=1)
+        df['date'] = pd.to_datetime(df['date'], format='%b,%d,%Y')
+        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+
+        for i, row in df.iterrows():
+            item = BollywikiScraperItem()
+            # round 4
+            item['title'] = row['title']
+            # round 5
+            item['director'] = row['director']
+            # round 6
+            item['cast'] = row['cast']
+            # round 7
+            item['opening_year'] = row['year']
+            item['opening_date'] = row['date']
+
+            self.logger.warning(f"item: {item}")
+            yield item
+
+    def preprocess_html(self, table):
+        table = table.get() # selector to string
+
+        # Parse the HTML with BeautifulSoup
+        soup = BeautifulSoup(table, 'html.parser')
+
+        # Find all unordered lists
+        unordered_lists = soup.find_all('ul')
+
+        for ul in unordered_lists:
+            # Extract text from each list item and join them with a comma
+            text = ','.join(li.get_text() for li in ul.find_all('li'))
+            # Replace the ul contents with the comma-separated text
+            ul.string = text
+
+        modified_html = str(soup)
+        return modified_html
+
+
 
 class BollywikiScraperItem(scrapy.Item):
     title = scrapy.Field()
-    title_link = scrapy.Field()
+    director = scrapy.Field()
+    cast = scrapy.Field()
+
+    opening_year = scrapy.Field()
+    opening_date = scrapy.Field()
+
 
 # class BollywikiSpiderSpider(scrapy.Spider):
 #     name = "bollywiki_spider"
