@@ -2,9 +2,7 @@ import scrapy
 import pandas as pd
 from io import StringIO
 
-from scrapy.loader import ItemLoader
-from bollywiki_scraper.items import BollywikiScraperItem
-from bs4 import BeautifulSoup
+
 
 class BollywikiSpiderSpider(scrapy.Spider):
     name = "bollywiki_spider"
@@ -15,59 +13,95 @@ class BollywikiSpiderSpider(scrapy.Spider):
     start_urls = ['https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024']
     
     def parse(self, response):
-        self.logger.info(f"response: {response.url}")
+        self.logger.warning(f"response: {response.url}")
         
         tables = response.xpath('//table[@class="wikitable"]')
-        self.logger.info(f"tables: {len(tables)}")
+        # tables is a list of selectors
+        self.logger.warning(f"# tables: {len(tables)}")
+        self.logger.warning(f"{tables}")
 
         for table in tables:
-            # table = self.preprocess_table(table.get())
-            table = self.process_table(table)
-
-            for tbl in pd.read_html(table):
-                df_table = self.process_table(tbl)
-                
-                for i, row in df_table.iterrows():
-                    item = BollywikiScraperItem()
-                    # item['opening_month'] = row['opening_month']
-                    # item['opening_day'] = row['opening_day']
-
-                    item['title'] = row['title']
-                    item['director_list'] = [c.strip() for c in row['director'].split(',') if row['director'] != '']
-                    item['cast_list'] = [c.strip() for c in row['cast'].split(',') if row['cast'] != '']
-                    item['studio_list'] = [c.strip() for c in row['studio'].split(',') if row['studio'] != '']
-
-                    yield item
+            item = self.process_table(table) 
+            yield item
 
     def process_table(self, table):
-        tables = pd.read_html(table.get())
-        assert len(tables) == 1, "Should only be one table"
-        table = tables[0]
+        table = table.get() # selector to string
+        item = BollywikiScraperItem()
+        self.logger.info(f"table: {table}")
+        return item
 
-        table.columns = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
-        table = table.fillna('')
+class BollywikiScraperItem(scrapy.Item):
+    title = scrapy.Field()
+    title_link = scrapy.Field()
 
-        # self.logger.info(f"table: {table}")
-        return table
+# class BollywikiSpiderSpider(scrapy.Spider):
+#     name = "bollywiki_spider"
+#     allowed_domains = ["en.wikipedia.org"]
+
+#     # urls = pd.read_csv('data/urls.csv')
+#     # start_urls = urls['start_urls'].tolist()
+#     start_urls = ['https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024']
     
-    def preprocess_table(self, table_html):
-        """Fixes the HTML in the table by replacing unordered lists with comma-separated text"""
-        soup = BeautifulSoup(table_html, 'html.parser')
+#     def parse(self, response):
+#         self.logger.info(f"response: {response.url}")
+        
+#         tables = response.xpath('//table[@class="wikitable"]')
+#         self.logger.info(f"tables: {len(tables)}")
 
-        # Find all unordered lists
-        unordered_lists = soup.find_all('ul')
+#         for table in tables:
+#             # table = self.preprocess_table(table.get())
+#             table = self.process_table(table)
 
-        for ul in unordered_lists:
-            # Extract text from each list item and join them with a comma
-            text = ', '.join(li.get_text() for li in ul.find_all('li'))
-            # Replace the ul contents with the comma-separated text
-            ul.string = text
+#             for tbl in pd.read_html(table):
+#                 df_table = self.process_table(tbl)
+                
+#                 for i, row in df_table.iterrows():
+#                     item = BollywikiScraperItem()
+#                     # item['opening_month'] = row['opening_month']
+#                     # item['opening_day'] = row['opening_day']
 
-        # Now the HTML is modified with comma-separated values in place of lists
-        # Convert it back to a string and use pandas.read_html
-        modified_html = str(soup)
-        return modified_html
+#                     item['title'] = row['title']
+#                     item['director_list'] = [c.strip() for c in row['director'].split(',') if row['director'] != '']
+#                     item['cast_list'] = [c.strip() for c in row['cast'].split(',') if row['cast'] != '']
+#                     item['studio_list'] = [c.strip() for c in row['studio'].split(',') if row['studio'] != '']
 
+#                     yield item
+
+#     def process_table(self, table):
+#         tables = pd.read_html(table.get())
+#         assert len(tables) == 1, "Should only be one table"
+#         table = tables[0]
+
+#         table.columns = ['opening_month', 'opening_day', 'title', 'director', 'cast', 'studio', 'ref']
+#         table = table.fillna('')
+
+#         # self.logger.info(f"table: {table}")
+#         return table
+    
+#     def preprocess_table(self, table_html):
+#         """Fixes the HTML in the table by replacing unordered lists with comma-separated text"""
+#         soup = BeautifulSoup(table_html, 'html.parser')
+
+#         # Find all unordered lists
+#         unordered_lists = soup.find_all('ul')
+
+#         for ul in unordered_lists:
+#             # Extract text from each list item and join them with a comma
+#             text = ', '.join(li.get_text() for li in ul.find_all('li'))
+#             # Replace the ul contents with the comma-separated text
+#             ul.string = text
+
+#         # Now the HTML is modified with comma-separated values in place of lists
+#         # Convert it back to a string and use pandas.read_html
+#         modified_html = str(soup)
+#         return modified_html
+
+
+# import scrapy
+
+# class BollywikiScraperItem(scrapy.Item):
+#     title = scrapy.Field()
+#     title_link = scrapy.Field()
 
     # def load_item(self, row):
     #     item = BollywikiScraperItem()
