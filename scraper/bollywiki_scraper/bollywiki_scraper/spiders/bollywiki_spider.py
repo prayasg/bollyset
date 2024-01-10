@@ -7,28 +7,36 @@ class BollywikiSpiderSpider(scrapy.Spider):
     name = "bollywiki_spider"
     allowed_domains = ["en.wikipedia.org"]
 
-    # urls = pd.read_csv('data/urls.csv')
-    # start_urls = urls['start_urls'].tolist()
-    start_urls = [
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2023',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2022',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2021',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2020',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2019',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2018',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2017',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2016',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2015',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2014',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2013',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2012',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2011',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2010',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2009',
-        'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2008',
+    urls = pd.read_csv('data/urls.csv')
+    start_urls = urls['start_urls'].tolist()
 
-    ]
+    # start_urls = [
+    #     'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_1992',
+    # ]
+
+
+    # start_urls = [
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2023',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2022',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2021',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2020',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2019',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2018',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2017',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2016',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2015',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2014',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2013',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2012',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2011',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2010',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2009',
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2008',
+
+        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2007',
+
+    # ]
 
     def parse(self, response):
         self.logger.warning(f"response: {response.url}")
@@ -54,25 +62,32 @@ class BollywikiSpiderSpider(scrapy.Spider):
         
         self.logger.info(f"table: {df}") # at a lower level, there if you want to see it default hidden
 
-        # basic transformations
-        year = response.url.split('_')[-1] 
-        df['year'] = year
 
         # some checks to see if the table is valid
         if self.df_skip(df):
             return
 
+        # basic transformations
+        year = response.url.split('_')[-1] 
+        df['year'] = year
+
         # Filter rows with more than 5 null values
         # sometimes the table picks up ghost rows at the bottom
         df = df[df.isnull().sum(axis=1) <= 3]
 
+        df = self.standardize_column_names(df)
+        self.logger.warning(f"df columns after standardizing: {df.columns}") # column names
+        self.logger.warning(f"df after standard:\n{df.head()}") # column names
+
         # Filter rows where the string length is more than 6
         # bug in the wiki data. one table has a row with a long string
         # Should be "J U N" but is "Good Luck Jerry"
-        df = df[df['Opening'].str.len() <= 6]
-
-        df = self.standardize_column_names(df)
+        # or keep if the opening_month is empty (2007 and prior data)
+        df[df['opening_month'].fillna('').apply(lambda x: len(x) <= 6 or x == '')]
+        
+        self.logger.warning(f"df shape before transformations: {df.shape}") # column names
         df = self.df_transformations(df)
+        self.logger.warning(f"df shape after transformations:\n{df.head()}") # column names
 
         for _, row in df.iterrows():
             item = BollywikiScraperItem()
@@ -89,6 +104,12 @@ class BollywikiSpiderSpider(scrapy.Spider):
             yield item
 
     def df_skip(self, df):
+        df = df.copy()
+        # if df doesnt have headers, only numbers, use first row as header
+        if df.columns.tolist() == list(range(len(df.columns))):
+            df.columns = df.iloc[0]
+            df = df.iloc[1:]
+
         # skip if table has too few rows
         if df.shape[0] < 2:
             self.logger.warning(f"df shape: {df.shape}. too few rows. skipping.")
@@ -96,6 +117,14 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
         # skip if table has columns with the work "Rank" or "Gross"
         if any('rank' in col.lower() for col in df.columns): 
+            self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
+            return True
+        
+        if any('number' in col.lower() for col in df.columns): 
+            self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
+            return True
+        
+        if any('no.' in col.lower() for col in df.columns): 
             self.logger.warning(f"df columns: {df.columns}. has Rank or Gross. skipping.")
             return True
         
@@ -164,6 +193,7 @@ class BollywikiSpiderSpider(scrapy.Spider):
 
 
     def df_transformations(self, df):
+
         # hanlde missing values
         subset = ['title', 'director', 'cast', 'studio', 'ref']
         df.loc[:, subset] = df.loc[:, subset].fillna('')
@@ -179,8 +209,8 @@ class BollywikiSpiderSpider(scrapy.Spider):
         # sometimes it's a number, sometimes it's a string the column values slide around
         # replace all numbers with empty string and then NOne
         df['opening_month'] = df['opening_month'].str.replace(' ', '')
-        df['opening_month'] = df['opening_month'].str.replace('[0-9]+', '', regex=True)
-        df = df.applymap(lambda x: None if x == '' else x)
+        df['opening_month'] = df['opening_month'].str.replace('[0-9]+', 'bad', regex=True)
+        df = df.applymap(lambda x: None if 'bad' in str(x) else x)
         # filter out rows where opening_month is null
         df = df[df['opening_month'].notnull()]
 
@@ -188,9 +218,10 @@ class BollywikiSpiderSpider(scrapy.Spider):
         dates = dates.apply(lambda x: x.tolist(), axis=1) # ['JAN','1','2024']
         dates = dates.apply(lambda x: ','.join(x)) # 'JAN,1,2024'
 
-        dates = pd.to_datetime(dates, format='%b,%d,%Y') # pandas date object
+        dates = pd.to_datetime(dates, format='%b,%d,%Y', errors='coerce') # pandas date object
         df['date'] = dates.dt.strftime('%Y-%m-%d') # date obj to string
 
+        df['genre'] = df['genre'].fillna('')
         df['genre'] = df['genre'].str.replace('/', ',')
         df['genre'] = df['genre'].str.lower()
 

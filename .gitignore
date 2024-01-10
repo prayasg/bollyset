@@ -3,3 +3,6 @@
 *.pyc
 *.pyc
 scraper/bollywiki_scraper/data/.DS_Store
+*.pyc
+scraper/bollywiki_scraper/bollywiki_scraper/spiders/__pycache__/bollywiki_spider.cpython-311.pyc
+scraper/bollywiki_scraper/.DS_Store
