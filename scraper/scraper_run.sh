@@ -2,5 +2,5 @@
 
 conda activate bollyset
 
-cd ./holistic_llm_scraper
-scrapy crawl gnm_spider
+cd ./bollywiki_scraper
+scrapy crawl bollywiki_spider
