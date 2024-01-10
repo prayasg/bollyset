@@ -10,34 +10,6 @@ class BollywikiSpiderSpider(scrapy.Spider):
     urls = pd.read_csv('data/urls.csv')
     start_urls = urls['start_urls'].tolist()
 
-    # start_urls = [
-    #     'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_1992',
-    # ]
-
-
-    # start_urls = [
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2024',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2023',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2022',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2021',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2020',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2019',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2018',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2017',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2016',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2015',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2014',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2013',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2012',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2011',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2010',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2009',
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2008',
-
-        # 'https://en.wikipedia.org/wiki/List_of_Hindi_films_of_2007',
-
-    # ]
-
     def parse(self, response):
         self.logger.warning(f"response: {response.url}")
         
